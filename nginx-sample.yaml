@@ -1,9 +1,0 @@
-apiVersion: nginx.example.com/v1alpha1
-kind: Nginx
-metadata:
-  name: nginx-sample
-  namespace: default
-spec:
-  replicas: 2          # 副本数 2
-  image: nginx:1.24    # 镜像版本 1.24
-  servicePort: 8080    # 服务暴露端口 8080
