@@ -1,0 +1,34 @@
+apiVersion: delivery.example.com/v1alpha1
+kind: Rollout
+metadata:
+  name: demo-rollout
+  namespace: default
+spec:
+  targetRef:
+    kind: Deployment
+    name: demo
+    port: 8080
+  strategy:
+    type: Canary
+    steps:
+      - weight: 10
+        holdSeconds: 15
+      - weight: 50
+        holdSeconds: 15
+      - weight: 100
+        holdSeconds: 0
+  analysis:
+    intervalSeconds: 10
+    successThreshold: 1
+    failureThreshold: 2
+    metrics:
+      - name: dummy
+        promQL: ""
+        threshold: "1"
+        compare: LT
+  traffic:
+    provider: NginxIngress
+    host: demo.example.local
+    stableService: demo-stable
+    canaryService: demo-canary
+  rollbackOnFailure: true

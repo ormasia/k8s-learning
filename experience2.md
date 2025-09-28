@@ -45,7 +45,8 @@
 mkdir rollout-operator && cd rollout-operator
 go mod init github.com/your-name/rollout-operator
 kubebuilder init --domain example.com --repo github.com/your-name/rollout-operator
-kubebuilder create api --group delivery --version v1alpha1 --kind Rollout --resource --controller --webhook
+kubebuilder create api --group delivery --version v1alpha1 --kind Rollout --resource --controller
+kubebuilder create webhook --group delivery --version v1alpha1 --kind Rollout --defaulting --programmatic-validation
 make generate && make manifests
 ```
 
@@ -69,6 +70,7 @@ import (
 )
 
 type StrategyType string
+
 const (
 	Canary    StrategyType = "Canary"
 	BlueGreen StrategyType = "BlueGreen"
@@ -85,16 +87,16 @@ type RolloutStep struct {
 
 type RolloutStrategy struct {
 	// +kubebuilder:default=Canary
-	Type  StrategyType `json:"type,omitempty"`
+	Type StrategyType `json:"type,omitempty"`
 	// Canary 模式使用；BlueGreen 留空
 	// +optional
 	Steps []RolloutStep `json:"steps,omitempty"`
 }
 
 type MetricCheck struct {
-	Name      string  `json:"name"`
-	PromQL    string  `json:"promQL"`
-	Threshold float64 `json:"threshold"`
+	Name      string `json:"name"`
+	PromQL    string `json:"promQL"`
+	Threshold string `json:"threshold"`
 	// +kubebuilder:validation:Enum=LT;GT
 	Compare string `json:"compare"`
 }
@@ -102,21 +104,21 @@ type MetricCheck struct {
 type AnalysisSpec struct {
 	// +kubebuilder:default=30
 	// +kubebuilder:validation:Minimum=1
-	IntervalSeconds  int32         `json:"intervalSeconds,omitempty"`
+	IntervalSeconds int32 `json:"intervalSeconds,omitempty"`
 	// +kubebuilder:default=2
 	// +kubebuilder:validation:Minimum=1
-	SuccessThreshold int32         `json:"successThreshold,omitempty"`
+	SuccessThreshold int32 `json:"successThreshold,omitempty"`
 	// +kubebuilder:default=2
 	// +kubebuilder:validation:Minimum=1
-	FailureThreshold int32         `json:"failureThreshold,omitempty"`
+	FailureThreshold int32 `json:"failureThreshold,omitempty"`
 	// 最少 1 个；先可用“就绪率”代替
-	Metrics          []MetricCheck `json:"metrics"`
+	Metrics []MetricCheck `json:"metrics"`
 }
 
 type TrafficSpec struct {
 	// +kubebuilder:validation:Enum=NginxIngress
-	Provider string `json:"provider"`
-	Host     string `json:"host"`
+	Provider      string `json:"provider"`
+	Host          string `json:"host"`
 	StableService string `json:"stableService"`
 	CanaryService string `json:"canaryService"`
 }
@@ -132,15 +134,16 @@ type TargetRef struct {
 }
 
 type RolloutSpec struct {
-	TargetRef         TargetRef       `json:"targetRef"`
-	Strategy          RolloutStrategy `json:"strategy"`
-	Analysis          AnalysisSpec    `json:"analysis"`
-	Traffic           TrafficSpec     `json:"traffic"`
+	TargetRef TargetRef       `json:"targetRef"`
+	Strategy  RolloutStrategy `json:"strategy"`
+	Analysis  AnalysisSpec    `json:"analysis"`
+	Traffic   TrafficSpec     `json:"traffic"`
 	// +kubebuilder:default=true
-	RollbackOnFailure bool           `json:"rollbackOnFailure,omitempty"`
+	RollbackOnFailure bool `json:"rollbackOnFailure,omitempty"`
 }
 
 type RolloutPhase string
+
 const (
 	PhaseIdle        RolloutPhase = "Idle"
 	PhaseProgressing RolloutPhase = "Progressing"
@@ -151,13 +154,13 @@ const (
 )
 
 type RolloutStatus struct {
-	Phase          RolloutPhase      `json:"phase,omitempty"`
-	StepIndex      int32             `json:"stepIndex,omitempty"`
-	StableRevision string            `json:"stableRevision,omitempty"`
-	CanaryRevision string            `json:"canaryRevision,omitempty"`
+	Phase          RolloutPhase `json:"phase,omitempty"`
+	StepIndex      int32        `json:"stepIndex,omitempty"`
+	StableRevision string       `json:"stableRevision,omitempty"`
+	CanaryRevision string       `json:"canaryRevision,omitempty"`
 	// +listType=map
 	// +listMapKey=type
-	Conditions     []metav1.Condition `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -165,11 +168,13 @@ type RolloutStatus struct {
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Step",type=integer,JSONPath=`.status.stepIndex`
 // +kubebuilder:printcolumn:name="Strategy",type=string,JSONPath=`.spec.strategy.type`
+// +kubebuilder:webhook:path=/mutate-delivery-example-com-v1alpha1-rollout,mutating=true,failurePolicy=fail,sideEffects=None,groups=delivery.example.com,resources=rollouts,verbs=create;update,versions=v1alpha1,name=mrollout.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-delivery-example-com-v1alpha1-rollout,mutating=false,failurePolicy=fail,sideEffects=None,groups=delivery.example.com,resources=rollouts,verbs=create;update,versions=v1alpha1,name=vrollout.kb.io,admissionReviewVersions=v1
 type Rollout struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec   RolloutSpec   `json:"spec"`
-	Status RolloutStatus `json:"status,omitempty"`
+	Spec              RolloutSpec   `json:"spec"`
+	Status            RolloutStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -194,60 +199,85 @@ func init() { SchemeBuilder.Register(&Rollout{}, &RolloutList{}) }
 package v1alpha1
 
 import (
-	"fmt"
+	"k8s.io/apimachinery/pkg/runtime" // 新增：导入 runtime 包
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	admission "sigs.k8s.io/controller-runtime/pkg/webhook/admission" // 调整导入路径
 )
 
 // +kubebuilder:webhook:path=/mutate-delivery-example-com-v1alpha1-rollout,mutating=true,failurePolicy=Fail,sideEffects=None,groups=delivery.example.com,resources=rollouts,verbs=create;update,versions=v1alpha1,name=mrollout.kb.io,admissionReviewVersions=v1
 // +kubebuilder:webhook:path=/validate-delivery-example-com-v1alpha1-rollout,mutating=false,failurePolicy=Fail,sideEffects=None,groups=delivery.example.com,resources=rollouts,verbs=create;update,versions=v1alpha1,name=vrollout.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Defaulter = &Rollout{}
-var _ webhook.Validator = &Rollout{}
+var _ admission.Defaulter = &Rollout{} // 注意：这里也需要调整为 admission.Defaulter
+var _ admission.Validator = &Rollout{} // 调整为 admission.Validator
 
+// Default 方法保持不变（但接口从 webhook.Defaulter 改为 admission.Defaulter）
 func (r *Rollout) Default() {
-	if r.Spec.Strategy.Type == "" { r.Spec.Strategy.Type = Canary }
-	if r.Spec.Strategy.Type == Canary && len(r.Spec.Strategy.Steps) == 0 {
-		r.Spec.Strategy.Steps = []RolloutStep{{Weight:10,HoldSeconds:60},{Weight:30,HoldSeconds:60},{Weight:100}}
+	if r.Spec.Strategy.Type == "" {
+		r.Spec.Strategy.Type = Canary
 	}
-	if r.Spec.Analysis.IntervalSeconds == 0 { r.Spec.Analysis.IntervalSeconds = 30 }
-	if r.Spec.Analysis.SuccessThreshold == 0 { r.Spec.Analysis.SuccessThreshold = 2 }
-	if r.Spec.Analysis.FailureThreshold == 0 { r.Spec.Analysis.FailureThreshold = 2 }
-	if !r.Spec.RollbackOnFailure { r.Spec.RollbackOnFailure = true }
+	if r.Spec.Strategy.Type == Canary && len(r.Spec.Strategy.Steps) == 0 {
+		r.Spec.Strategy.Steps = []RolloutStep{{Weight: 10, HoldSeconds: 60}, {Weight: 30, HoldSeconds: 60}, {Weight: 100}}
+	}
+	if r.Spec.Analysis.IntervalSeconds == 0 {
+		r.Spec.Analysis.IntervalSeconds = 30
+	}
+	if r.Spec.Analysis.SuccessThreshold == 0 {
+		r.Spec.Analysis.SuccessThreshold = 2
+	}
+	if r.Spec.Analysis.FailureThreshold == 0 {
+		r.Spec.Analysis.FailureThreshold = 2
+	}
+	if !r.Spec.RollbackOnFailure {
+		r.Spec.RollbackOnFailure = true
+	}
 }
 
-func (r *Rollout) ValidateCreate() error { return r.validate() }
-func (r *Rollout) ValidateUpdate(_ webhook.Object) error { return r.validate() }
-func (r *Rollout) ValidateDelete() error { return nil }
+// 调整 ValidateCreate 方法签名：返回 (admission.Warnings, error)
+func (r *Rollout) ValidateCreate() (admission.Warnings, error) {
+	return nil, r.validate()
+}
 
+// 调整 ValidateUpdate 方法签名：参数改为 runtime.Object，返回 (admission.Warnings, error)
+func (r *Rollout) ValidateUpdate(oldObj runtime.Object) (admission.Warnings, error) {
+	return nil, r.validate()
+}
+
+// ValidateDelete 保持不变
+func (r *Rollout) ValidateDelete() (admission.Warnings, error) {
+	return nil, nil
+}
+
+// validate 方法逻辑不变
 func (r *Rollout) validate() error {
 	var allErrs field.ErrorList
 	fp := field.NewPath("spec")
 	if r.Spec.Strategy.Type == BlueGreen && len(r.Spec.Strategy.Steps) > 0 {
-		allErrs = append(allErrs, field.Invalid(fp.Child("strategy","steps"), r.Spec.Strategy.Steps, "BlueGreen must not define steps"))
+		allErrs = append(allErrs, field.Invalid(fp.Child("strategy", "steps"), r.Spec.Strategy.Steps, "BlueGreen must not define steps"))
 	}
 	if r.Spec.Strategy.Type == Canary && len(r.Spec.Strategy.Steps) == 0 {
-		allErrs = append(allErrs, field.Required(fp.Child("strategy","steps"), "steps required for canary"))
+		allErrs = append(allErrs, field.Required(fp.Child("strategy", "steps"), "steps required for canary"))
 	} else {
 		prev := int32(-1)
 		for i, s := range r.Spec.Strategy.Steps {
 			if s.Weight < 0 || s.Weight > 100 {
-				allErrs = append(allErrs, field.Invalid(fp.Child("strategy","steps").Index(i).Child("weight"), s.Weight, "0..100"))
+				allErrs = append(allErrs, field.Invalid(fp.Child("strategy", "steps").Index(i).Child("weight"), s.Weight, "0..100"))
 			}
 			if s.Weight < prev {
-				allErrs = append(allErrs, field.Invalid(fp.Child("strategy","steps"), r.Spec.Strategy.Steps, "weights must be non-decreasing"))
+				allErrs = append(allErrs, field.Invalid(fp.Child("strategy", "steps"), r.Spec.Strategy.Steps, "weights must be non-decreasing"))
 			}
 			prev = s.Weight
 		}
 	}
 	if len(r.Spec.Analysis.Metrics) == 0 {
-		allErrs = append(allErrs, field.Required(fp.Child("analysis","metrics"), "at least 1 metric"))
+		allErrs = append(allErrs, field.Required(fp.Child("analysis", "metrics"), "at least 1 metric"))
 	}
 	if r.Spec.Traffic.Host == "" || r.Spec.Traffic.StableService == "" || r.Spec.Traffic.CanaryService == "" {
 		allErrs = append(allErrs, field.Required(fp.Child("traffic"), "host/stableService/canaryService required"))
 	}
-	if len(allErrs) == 0 { return nil }
-	return fmt.Errorf(allErrs.ToAggregate().Error())
+	if len(allErrs) == 0 {
+		return nil
+	}
+	return allErrs.ToAggregate()
 }
 ```
 
@@ -536,15 +566,44 @@ spec:
   rollbackOnFailure: true
 ```
 
-应用并观察：
+应用并观察（打开多个终端/面板一起看更直观）：
 
 ```bash
+# 1) 应用 CR（前提：你已在另一个终端本地启动控制器）
 kubectl apply -f rollout-sample.yaml
-watch -n1 'kubectl get rollout demo-rollout -o jsonpath="{.status.phase} {.status.stepIndex}{\"\\n\"}"'
-kubectl get deploy,svc -l app=demo -A   # 查看 stable/canary 是否创建
+
+# 可选：本地启动控制器（另一个终端运行，并关闭 Webhook）
+# ENABLE_WEBHOOKS=false go run ./cmd/main.go --metrics-bind-address=:18080 --health-probe-bind-address=:18081
+
+# 2) 观察 Rollout 状态机（Phase/Step）
+watch -n1 'kubectl get rollout demo-rollout -n default \
+	-o custom-columns=PHASE:.status.phase,STEP:.status.stepIndex --no-headers'
+
+# 3) 观察工作负载与就绪（标签已由控制器自动补齐 app=demo, track=stable|canary）
+kubectl get deploy -n default -l app=demo --show-labels
+watch -n1 'kubectl get deploy -n default -l app=demo -o wide'
+watch -n1 'kubectl get pods -n default -l app=demo \
+	-o custom-columns=NAME:.metadata.name,TRACK:.metadata.labels.track,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount --no-headers'
+
+# 4) 观察服务与后端端点
+kubectl get svc -n default -l app=demo --show-labels -o wide
+watch -n1 'kubectl get endpoints -n default -l app=demo -o wide'
+# 或使用 EndpointSlice（新集群推荐）：
+watch -n1 'kubectl get endpointslices.discovery.k8s.io -n default \
+	-l kubernetes.io/service-name in (demo-stable,demo-canary) \
+	-o custom-columns=NAME:.metadata.name,SVC:.metadata.labels."kubernetes.io/service-name",ADDRS:.endpoints[*].addresses --no-headers'
+
+# 5) 触发一次主动 Reconcile（当你想立刻重跑逻辑时）
+kubectl annotate rollout demo-rollout -n default reconcile-ts=$(date +%s) --overwrite
+
+# 6) 查看控制器日志
+# - 本地运行：直接看你启动控制器的那个终端（会打印如 `[traffic] host=... weight=...`、`promote`）
+# - 若以部署方式运行：
+# kubectl -n rollout-operator-system logs -l control-plane=controller-manager -f --tail=200
 ```
 
-> 若 Ready 引擎条件满足（canary Deployment 就绪），`phase` 会从 `Progressing→Analyzing→Progressing→…→Succeeded`。
+提示：若 Ready 引擎条件满足（canary Deployment 就绪），Phase 通常会经历
+`Progressing → Analyzing → Progressing → … → Succeeded`，同时日志会看到多次 SetWeight（10/50/100）以及最后的 promote。
 
 ---
 
@@ -552,6 +611,19 @@ kubectl get deploy,svc -l app=demo -A   # 查看 stable/canary 是否创建
 
 * **晋级**：让 canary 副本能快速就绪（镜像拉取快、探针简单），看 `stepIndex` 逐步增加；
 * **失败回滚**：把 canary 的存活探针设得很严格或镜像写错，使其不就绪 → 观察 `phase=RolledBack` 且 `Reset()` 被调用（日志可见）。
+
+一些可直接使用的小命令（任选其一模拟失败/恢复）：
+
+```bash
+# 模拟失败：把 canary 镜像改成不存在的版本
+kubectl patch deploy demo-rollout-canary -n default \
+	--type=merge -p '{"spec":{"template":{"spec":{"containers":[{"name":"demo","image":"nginx:0.0.0"}]}}}}'
+
+# 恢复正常：改回可用镜像并触发 Reconcile
+kubectl patch deploy demo-rollout-canary -n default \
+	--type=merge -p '{"spec":{"template":{"spec":{"containers":[{"name":"demo","image":"nginx:1.25"}]}}}}'
+kubectl annotate rollout demo-rollout -n default reconcile-ts=$(date +%s) --overwrite
+```
 
 ---
 

@@ -1,0 +1,12 @@
+apiVersion: delivery.example.com/v1alpha1
+kind: Rollout
+metadata:
+  labels:
+    app.kubernetes.io/name: rollout
+    app.kubernetes.io/instance: rollout-sample
+    app.kubernetes.io/part-of: rollout-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: rollout-operator
+  name: rollout-sample
+spec:
+  # TODO(user): Add fields here
