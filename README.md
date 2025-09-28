@@ -52,3 +52,43 @@ kubebuilder
     docker-init:  
     Version:          0.19.0  
     GitCommit:        de40ad0  
+
+# 命令
+
+## 查看svc
+要查看集群里的“所有 Service”：
+
+- 全部命名空间
+  ```bash
+  kubectl get svc -A
+  ```
+- 全部命名空间（更多列）
+  ```bash
+  kubectl get services --all-namespaces -o wide
+  ```
+- 显示服务的标签
+  ```bash
+  kubectl get svc -A --show-labels
+  ```
+- 仅某个命名空间
+  ```bash
+  kubectl get svc -n default
+  ```
+- 按标签筛选
+  ```bash
+  kubectl get svc -A -l app=demo
+  ```
+- 持续观察
+  ```bash
+  watch -n1 'kubectl get svc -A -o wide'
+  ```
+
+补充：想看每个 Service 的后端端点
+- 传统 Endpoints
+  ```bash
+  kubectl get endpoints -A
+  ```
+- EndpointSlice（新资源）
+  ```bash
+  kubectl get endpointslices.discovery.k8s.io -A
+  ```
