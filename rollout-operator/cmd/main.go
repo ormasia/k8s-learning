@@ -127,7 +127,7 @@ func main() {
 	if err = (&controller.RolloutReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Traffic:  &traffic.NginxProvider{},
+		Traffic:  &traffic.NginxProvider{Client: mgr.GetClient(), Namespace: "default"},
 		Analysis: &analysis.ReadyEngine{Client: mgr.GetClient()},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Rollout")
