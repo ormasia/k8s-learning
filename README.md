@@ -289,3 +289,33 @@ ps aux | grep kubelet
 ```
 
 journalctl -u kubelet --no-pager -l # 显示 kubelet 的完整系统日志
+
+
+
+## 职责对比表
+
+| 组件 | 主要职责 | 类比 | 工作内容 |
+|------|----------|------|----------|
+| **kube-scheduler** | 调度决策 | 🧠 大脑 - 指挥官 | 决定 Pod 去哪个节点 |
+| **kubelet** | 执行操作 | 💪 手脚 - 执行者 | 在节点上实际创建和管理 Pod |
+| **API Server** | 协调通信 | 📡 通讯员 | 传递调度决策和状态更新 |
+
+## 创建集群
+```bash
+kind create cluster --name my-first-cluster
+```
+
+## 切换集群 && 查看所有集群
+```bash
+# 查看当前 Context
+kubectl config current-context
+
+# 查看所有 Context
+kubectl config get-contexts
+
+
+
+## 进入容器内部 redis
+```bash
+kubectl -n work exec -it deployment/saythx-redis -- redis-cli
+```
