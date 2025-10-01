@@ -1,0 +1,12 @@
+apiVersion: aiops.example.com/v1alpha1
+kind: Remediation
+metadata:
+  labels:
+    app.kubernetes.io/name: remediation
+    app.kubernetes.io/instance: remediation-sample
+    app.kubernetes.io/part-of: aiops-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: aiops-operator
+  name: remediation-sample
+spec:
+  # TODO(user): Add fields here
