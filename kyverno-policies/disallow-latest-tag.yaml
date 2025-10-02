@@ -1,0 +1,66 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"kyverno.io/v1","kind":"ClusterPolicy","metadata":{"annotations":{"policies.kyverno.io/category":"Best Practices","policies.kyverno.io/description":"The ':latest' tag is mutable and can lead to unexpected errors if the image changes. A best practice is to use an immutable tag that maps to a specific version of an application Pod. This policy validates that the image specifies a tag and that it is not called `latest`.","policies.kyverno.io/minversion":"1.6.0","policies.kyverno.io/severity":"medium","policies.kyverno.io/subject":"Pod","policies.kyverno.io/title":"Disallow Latest Tag"},"name":"disallow-latest-tag"},"spec":{"background":true,"rules":[{"match":{"any":[{"resources":{"kinds":["Pod"]}}]},"name":"require-image-tag","validate":{"foreach":[{"list":"request.object.spec.containers","pattern":{"image":"*:*"}},{"list":"request.object.spec.initContainers","pattern":{"image":"*:*"}},{"list":"request.object.spec.ephemeralContainers","pattern":{"image":"*:*"}}],"message":"An image tag is required."}},{"match":{"any":[{"resources":{"kinds":["Pod"]}}]},"name":"validate-image-tag","validate":{"foreach":[{"list":"request.object.spec.containers","pattern":{"image":"!*:latest"}},{"list":"request.object.spec.initContainers","pattern":{"image":"!*:latest"}},{"list":"request.object.spec.ephemeralContainers","pattern":{"image":"!*:latest"}}],"message":"Using a mutable image tag e.g. 'latest' is not allowed."}}],"validationFailureAction":"Audit"}}
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/description: The ':latest' tag is mutable and can lead to
+      unexpected errors if the image changes. A best practice is to use an immutable
+      tag that maps to a specific version of an application Pod. This policy validates
+      that the image specifies a tag and that it is not called `latest`.
+    policies.kyverno.io/minversion: 1.6.0
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/title: Disallow Latest Tag
+  creationTimestamp: "2025-09-30T18:31:15Z"
+  generation: 2
+  name: disallow-latest-tag
+  resourceVersion: "1505"
+  uid: fee978bf-ba4b-4155-9c0b-d8702ab875fc
+spec:
+  admission: true
+  background: true
+  emitWarning: false
+  rules:
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: require-image-tag
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      foreach:
+      - list: request.object.spec.containers
+        pattern:
+          image: '*:*'
+      - list: request.object.spec.initContainers
+        pattern:
+          image: '*:*'
+      - list: request.object.spec.ephemeralContainers
+        pattern:
+          image: '*:*'
+      message: An image tag is required.
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: validate-image-tag
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      foreach:
+      - list: request.object.spec.containers
+        pattern:
+          image: '!*:latest'
+      - list: request.object.spec.initContainers
+        pattern:
+          image: '!*:latest'
+      - list: request.object.spec.ephemeralContainers
+        pattern:
+          image: '!*:latest'
+      message: Using a mutable image tag e.g. 'latest' is not allowed.
+  validationFailureAction: Enforce

@@ -1,0 +1,59 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kyverno.io/kubernetes-version: '>=1.25.0-0'
+    kyverno.io/kyverno-version: v1.15.2
+    meta.helm.sh/release-name: kyverno-policies
+    meta.helm.sh/release-namespace: kyverno
+    policies.kyverno.io/category: Pod Security Standards (Baseline)
+    policies.kyverno.io/description: Access to host ports allows potential snooping
+      of network traffic and should not be allowed, or at minimum restricted to a
+      known list. This policy ensures the `hostPort` field is unset or set to `0`.
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/title: Disallow hostPorts
+  creationTimestamp: "2025-09-30T18:29:22Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/component: kyverno
+    app.kubernetes.io/instance: kyverno-policies
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: kyverno-policies
+    app.kubernetes.io/part-of: kyverno-policies
+    app.kubernetes.io/version: 3.5.2
+    helm.sh/chart: kyverno-policies-3.5.2
+  name: disallow-host-ports
+  resourceVersion: "1079"
+  uid: 4e73c9de-737a-4ab4-a8ba-1ba2a150b0a9
+spec:
+  admission: true
+  background: true
+  emitWarning: false
+  failurePolicy: Fail
+  rules:
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: host-ports-none
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      failureAction: Audit
+      message: Use of host ports is disallowed. The fields spec.containers[*].ports[*].hostPort
+        , spec.initContainers[*].ports[*].hostPort, and spec.ephemeralContainers[*].ports[*].hostPort
+        must either be unset or set to `0`.
+      pattern:
+        spec:
+          =(ephemeralContainers):
+          - =(ports):
+            - =(hostPort): 0
+          =(initContainers):
+          - =(ports):
+            - =(hostPort): 0
+          containers:
+          - =(ports):
+            - =(hostPort): 0
+  validationFailureAction: Audit

@@ -1,0 +1,52 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kyverno.io/kubernetes-version: '>=1.25.0-0'
+    kyverno.io/kyverno-version: v1.15.2
+    meta.helm.sh/release-name: kyverno-policies
+    meta.helm.sh/release-namespace: kyverno
+    policies.kyverno.io/category: Pod Security Standards (Baseline)
+    policies.kyverno.io/description: HostPath volumes let Pods use host directories
+      and volumes in containers. Using host resources can be used to access shared
+      data or escalate privileges and should not be allowed. This policy ensures no
+      hostPath volumes are in use.
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod,Volume
+    policies.kyverno.io/title: Disallow hostPath
+  creationTimestamp: "2025-09-30T18:29:22Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/component: kyverno
+    app.kubernetes.io/instance: kyverno-policies
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: kyverno-policies
+    app.kubernetes.io/part-of: kyverno-policies
+    app.kubernetes.io/version: 3.5.2
+    helm.sh/chart: kyverno-policies-3.5.2
+  name: disallow-host-path
+  resourceVersion: "1075"
+  uid: 0eeb8c12-1347-4b87-a75b-d625238b904c
+spec:
+  admission: true
+  background: true
+  emitWarning: false
+  failurePolicy: Fail
+  rules:
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: host-path
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      failureAction: Audit
+      message: HostPath volumes are forbidden. The field spec.volumes[*].hostPath
+        must be unset.
+      pattern:
+        spec:
+          =(volumes):
+          - X(hostPath): "null"
+  validationFailureAction: Audit

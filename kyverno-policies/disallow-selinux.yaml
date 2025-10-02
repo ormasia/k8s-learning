@@ -1,0 +1,104 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kyverno.io/kubernetes-version: '>=1.25.0-0'
+    kyverno.io/kyverno-version: v1.15.2
+    meta.helm.sh/release-name: kyverno-policies
+    meta.helm.sh/release-namespace: kyverno
+    policies.kyverno.io/category: Pod Security Standards (Baseline)
+    policies.kyverno.io/description: SELinux options can be used to escalate privileges
+      and should not be allowed. This policy ensures that the `seLinuxOptions` field
+      is undefined.
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/title: Disallow SELinux
+  creationTimestamp: "2025-09-30T18:29:22Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/component: kyverno
+    app.kubernetes.io/instance: kyverno-policies
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: kyverno-policies
+    app.kubernetes.io/part-of: kyverno-policies
+    app.kubernetes.io/version: 3.5.2
+    helm.sh/chart: kyverno-policies-3.5.2
+  name: disallow-selinux
+  resourceVersion: "1078"
+  uid: 0a71f679-196c-45f9-8864-b253a1b66217
+spec:
+  admission: true
+  background: true
+  emitWarning: false
+  failurePolicy: Fail
+  rules:
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: selinux-type
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      failureAction: Audit
+      message: Setting the SELinux type is restricted. The fields spec.securityContext.seLinuxOptions.type,
+        spec.containers[*].securityContext.seLinuxOptions.type, , spec.initContainers[*].securityContext.seLinuxOptions,
+        and spec.ephemeralContainers[*].securityContext.seLinuxOptions.type must either
+        be unset or set to one of the allowed values (container_t, container_init_t,
+        or container_kvm_t).
+      pattern:
+        spec:
+          =(ephemeralContainers):
+          - =(securityContext):
+              =(seLinuxOptions):
+                =(type): container_t | container_init_t | container_kvm_t
+          =(initContainers):
+          - =(securityContext):
+              =(seLinuxOptions):
+                =(type): container_t | container_init_t | container_kvm_t
+          =(securityContext):
+            =(seLinuxOptions):
+              =(type): container_t | container_init_t | container_kvm_t
+          containers:
+          - =(securityContext):
+              =(seLinuxOptions):
+                =(type): container_t | container_init_t | container_kvm_t
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: selinux-user-role
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      failureAction: Audit
+      message: Setting the SELinux user or role is forbidden. The fields spec.securityContext.seLinuxOptions.user,
+        spec.securityContext.seLinuxOptions.role, spec.containers[*].securityContext.seLinuxOptions.user,
+        spec.containers[*].securityContext.seLinuxOptions.role, spec.initContainers[*].securityContext.seLinuxOptions.user,
+        spec.initContainers[*].securityContext.seLinuxOptions.role, spec.ephemeralContainers[*].securityContext.seLinuxOptions.user,
+        and spec.ephemeralContainers[*].securityContext.seLinuxOptions.role must be
+        unset.
+      pattern:
+        spec:
+          =(ephemeralContainers):
+          - =(securityContext):
+              =(seLinuxOptions):
+                X(role): "null"
+                X(user): "null"
+          =(initContainers):
+          - =(securityContext):
+              =(seLinuxOptions):
+                X(role): "null"
+                X(user): "null"
+          =(securityContext):
+            =(seLinuxOptions):
+              X(role): "null"
+              X(user): "null"
+          containers:
+          - =(securityContext):
+              =(seLinuxOptions):
+                X(role): "null"
+                X(user): "null"
+  validationFailureAction: Audit

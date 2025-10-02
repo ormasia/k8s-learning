@@ -1,0 +1,61 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  annotations:
+    kyverno.io/kubernetes-version: '>=1.25.0-0'
+    kyverno.io/kyverno-version: v1.15.2
+    meta.helm.sh/release-name: kyverno-policies
+    meta.helm.sh/release-namespace: kyverno
+    policies.kyverno.io/category: Pod Security Standards (Baseline)
+    policies.kyverno.io/description: The default /proc masks are set up to reduce
+      attack surface and should be required. This policy ensures nothing but the default
+      procMount can be specified. Note that in order for users to deviate from the
+      `Default` procMount requires setting a feature gate at the API server.
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/title: Disallow procMount
+  creationTimestamp: "2025-09-30T18:29:22Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/component: kyverno
+    app.kubernetes.io/instance: kyverno-policies
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: kyverno-policies
+    app.kubernetes.io/part-of: kyverno-policies
+    app.kubernetes.io/version: 3.5.2
+    helm.sh/chart: kyverno-policies-3.5.2
+  name: disallow-proc-mount
+  resourceVersion: "1082"
+  uid: 8e146cd8-dfe9-480e-98bc-7f94d7de5e15
+spec:
+  admission: true
+  background: true
+  emitWarning: false
+  failurePolicy: Fail
+  rules:
+  - match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+    name: check-proc-mount
+    skipBackgroundRequests: true
+    validate:
+      allowExistingViolations: true
+      failureAction: Audit
+      message: Changing the proc mount from the default is not allowed. The fields
+        spec.containers[*].securityContext.procMount, spec.initContainers[*].securityContext.procMount,
+        and spec.ephemeralContainers[*].securityContext.procMount must be unset or
+        set to `Default`.
+      pattern:
+        spec:
+          =(ephemeralContainers):
+          - =(securityContext):
+              =(procMount): Default
+          =(initContainers):
+          - =(securityContext):
+              =(procMount): Default
+          containers:
+          - =(securityContext):
+              =(procMount): Default
+  validationFailureAction: Audit
