@@ -132,6 +132,7 @@ func (r *PodDetectorReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					Namespace: pod.Namespace, Name: pod.Name,
 				},
 				Evidence: apiextensionsv1.JSON{Raw: evJSON},
+				Approved: false, // 默认未审批，需要人工设置为 true
 			},
 		}
 		if err := r.Create(ctx, rem); err != nil {

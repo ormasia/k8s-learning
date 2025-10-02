@@ -52,7 +52,9 @@ spec:
             description: RemediationSpec defines the desired state of Remediation
             properties:
               approved:
-                description: 审批开关（默认 false；改为 true 后，执行器才会落补丁）
+                description: |-
+                  审批开关（默认 false；改为 true 后，执行器才会落补丁）
+                  去掉 omitempty，使 approved 字段始终显示，便于审计和调试
                 type: boolean
               evidence:
                 description: |-
@@ -104,6 +106,7 @@ spec:
                 type: object
                 x-kubernetes-map-type: atomic
             required:
+            - approved
             - targetRef
             type: object
           status:

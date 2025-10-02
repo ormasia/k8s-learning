@@ -40,7 +40,8 @@ type RemediationSpec struct {
 	// +kubebuilder:validation:Optional
 	Evidence apiextensionsv1.JSON `json:"evidence,omitempty"`
 	// 审批开关（默认 false；改为 true 后，执行器才会落补丁）
-	Approved bool `json:"approved,omitempty"`
+	// 去掉 omitempty，使 approved 字段始终显示，便于审计和调试
+	Approved bool `json:"approved"`
 }
 
 // RemediationStatus defines the observed state of Remediation
