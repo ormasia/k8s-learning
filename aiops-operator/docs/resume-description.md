@@ -48,6 +48,10 @@
 - 通过严格的状态管理和审批机制，确保 0 误操作风险
 
 技术栈：Go、Kubernetes、Kubebuilder、controller-runtime、client-go、Ollama、Kyverno
+
+个人收获：
+通过本项目深入掌握了 Kubernetes Operator 开发的核心机制（Informer、WorkQueue、Reconcile 循环），
+熟练运用 controller-runtime 框架和 Server-Side Apply 等高级特性，具备云原生应用的全栈开发与问题攻坚能力。
 ```
 
 ---
