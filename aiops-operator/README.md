@@ -63,6 +63,7 @@
 | 面试问题 | 回答要点 |
 | --- | --- |
 | 为什么要自定义 CRD？ | 需要声明式接口聚合证据、审批、补丁，并复用 RBAC/审计能力。【F:aiops-operator/api/v1alpha1/remediation_types.go†L24-L74】 |
+| 控制器如何协作？ | PodDetector 监听异常 Pod 并 Upsert Remediation；RemediationExecutor 监听 Remediation，负责 LLM 补丁与 SSA 执行，两个控制器分别由 manager 注册后形成闭环。【F:aiops-operator/internal/controller/pod_controller.go†L85-L166】【F:aiops-operator/internal/controller/remediation_controller.go†L84-L196】【F:aiops-operator/cmd/main.go†L80-L118】 |
 | 如何保证 LLM 输出可控？ | JSON Schema 约束 + 严格解析，任何不合法输出都触发 `Failed` Condition 并等待重试。【F:aiops-operator/internal/controller/remediation_controller.go†L57-L119】 |
 | 如果补丁涉及多个对象？ | 当前 MVP 取第一条 action，保留完整 JSON，未来可迭代多对象执行或引入人工筛选流程。【F:aiops-operator/internal/controller/remediation_controller.go†L108-L134】 |
 | 如何扩展更多异常类型？ | 增加新的 Detector（Deployment/StatefulSet 等），沿用 Remediation CR 聚合多源事件。【F:aiops-operator/internal/controller/pod_controller.go†L70-L138】 |
