@@ -7,6 +7,13 @@
 - **业务痛点**：传统 SRE 需要人工排查 Pod Crash/ImagePullBackOff 等问题，效率低且不可审计。
 - **量化成果**：接入双控制器后，常见镜像/配置类故障从发现到修复缩短到 ~5 分钟；配合 Kyverno 准入基线，准入阶段可拦截约 40% 的配置错误。【F:aiops-operator/internal/controller/pod_controller.go†L70-L138】【F:kyverno-policies/disallow-latest-tag.yaml†L1-L56】
 
+## 1.5 整体运行思路（先给面试官大图）
+- **入口信号**：Pod 检测器监听运行中对象→筛出异常状态→写入 Remediation。
+- **智能分析**：执行控制器基于证据调用 LLM 产出结构化补丁，并写入状态机等待审批。
+- **人工兜底**：SRE 在 `approved` 关口把控补丁是否可执行，可结合外部流程（如 ChatOps）。
+- **安全执行**：通过 SSA dry-run + FieldOwner 双护栏安全落地补丁并记录审计信息。
+- **闭环反馈**：条件状态 + 时间戳刻画每一步，失败会重试并产生清晰报错。
+
 ## 2. 三层架构速览
 1. **自定义接口层（Remediation CRD）**：声明修复目标、证据、审批开关以及状态机，是团队协作与审计的统一入口。【F:aiops-operator/api/v1alpha1/remediation_types.go†L24-L74】
 2. **控制循环层**：
@@ -45,6 +52,13 @@
    - 手动批准，观察控制器日志中的 dry-run/SSA 过程，以及 Deployment 恢复情况。
 3. **可视化素材**：准备 `kubectl get remediation -o yaml` 片段或 Grafana 报表截图，展示从异常→修复的时间线。
 
+## 6.5 面试官可能深挖的细节
+- **控制器并发与幂等**：解释为什么 Remediation 名称与 Pod 绑定、如何避免重复执行（条件检查 + `Applied` 快速返回）。
+- **LLM 输出校验**：准备说明 JSON Schema 校验逻辑、失败后的回退机制以及重试间隔设置。【F:aiops-operator/internal/controller/remediation_controller.go†L57-L119】
+- **Dry-run 失败排查**：举例字段所有权冲突、权限不足、Schema 不匹配时的日志与 Condition 表现，强调如何定位并修正补丁。【F:aiops-operator/internal/controller/remediation_controller.go†L120-L166】
+- **审批流接入方式**：可与企业内已有的 ITSM/ChatOps 打通，只需自动化组件修改 `approved` 字段，体现项目易落地的优点。
+- **Kyverno 协同场景**：需要说明 Kyverno 目前只做准入守卫，尚未与 Remediation 联动，避免面试官误解功能边界。【F:kyverno-policies/HOWTO.md†L1-L41】
+
 ## 7. 常见追问 & 回答提示
 | 面试问题 | 回答要点 |
 | --- | --- |
@@ -54,6 +68,13 @@
 | 如何扩展更多异常类型？ | 增加新的 Detector（Deployment/StatefulSet 等），沿用 Remediation CR 聚合多源事件。【F:aiops-operator/internal/controller/pod_controller.go†L70-L138】 |
 | 灰度/生产如何落地？ | 通过环境变量区分模型地址，先在预发集群启用 `Audit` 模式观察效果，再切换 `Enforce` 与自动审批策略。|
 | Kyverno 会直接生成 Remediation 吗？ | 目前不会：Kyverno 只负责准入拦截或审计。未来规划是把违规事件转换为 Remediation，但当前版本仍由 Pod 检测器触发。|
+
+## 7.5 Kyverno 策略写法速览
+- **资源结构**：以 `ClusterPolicy` 为例，核心字段包括 `spec.rules[].match`（匹配对象）、`validate`（校验逻辑）、`message`（失败提示）与 `validationFailureAction`（Enforce/Audit）。【F:kyverno-policies/disallow-latest-tag.yaml†L1-L56】
+- **匹配语法**：支持通配命名空间、资源种类、标签选择器等；示例策略通过 `match.resources.kinds: ["Pod"]` 与 `spec.matchResources` 控制作用面。【F:kyverno-policies/disallow-latest-tag.yaml†L9-L23】
+- **条件表达式**：`validate.deny.conditions[]` 使用 JMESPath 检查字段，例如 `"{{ contains(@, ':latest') }}"` 判定镜像标签是否为 latest。【F:kyverno-policies/disallow-latest-tag.yaml†L27-L52】
+- **运行模式**：将 `validationFailureAction` 设为 `Enforce` 可直接拒绝违规请求；改为 `Audit` 则仅记录报告，适合灰度阶段。【F:kyverno-policies/disallow-latest-tag.yaml†L4-L7】
+- **调试建议**：利用 `kubectl apply -f` 提交违规示例 YAML 验证策略效果，并查看 `PolicyReport` 了解命中情况，面试时可作为实操案例说明掌握度。【F:kyverno-policies/HOWTO.md†L17-L41】
 
 ## 8. 后续规划
 - **增强证据采集**（规划中）：对接容器 previous logs、节点指标，提高 LLM 诊断准确度。【F:aiops-operator/pkg/evidence/evidence.go†L1-L83】
